@@ -11,8 +11,9 @@ function Equipos() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [deletingId, setDeletingId] = useState(null); // Nuevo estado para saber cuál se está eliminando
 
-  const baseUrl = 'https://apex.oracle.com/pls/apex/appsweb/equipos/equipos/';
+  const baseUrl = 'https://apex.oracle.com/pls/apex/appsweb/equipos/';
 
   useEffect(() => {
     fetchEquipos();
@@ -31,7 +32,7 @@ function Equipos() {
       setEquipos(data.items || []);
       setError(null);
     } catch (error) {
-      console.error('Error:', error);
+      setEquipos([]); // Asegura que la tabla se limpie si hay error
       setError(error.message);
     } finally {
       setLoading(false);
@@ -87,10 +88,7 @@ function Equipos() {
       await fetchEquipos(); // Actualizar lista
 
     } catch (error) {
-      console.error('Error completo:', error);
       setError(error.message);
-      
-      // Mostrar detalles adicionales para errores 555
       if (error.message.includes('555')) {
         setError(prev => `${prev} - Verifica la configuración del endpoint REST`);
       }
@@ -103,9 +101,18 @@ function Equipos() {
     if (!window.confirm('¿Estás seguro de eliminar este equipo?')) return;
 
     try {
-      setLoading(true);
-      const response = await fetch(`${baseUrl}${id}`, {
-        method: 'DELETE'
+      setDeletingId(id);
+      setError(null);
+      setSuccess(null);
+
+      // ORDS: POST con _method=DELETE y ?id=...
+      const formData = new FormData();
+      formData.append('_method', 'DELETE');
+      formData.append('id', id);
+
+      const response = await fetch(`${baseUrl}?id=${id}`, {
+        method: 'POST',
+        body: formData
       });
 
       if (!response.ok) {
@@ -113,12 +120,13 @@ function Equipos() {
       }
 
       setSuccess('Equipo eliminado correctamente');
-      await fetchEquipos();
+      // Elimina el equipo del estado antes de refrescar la lista
+      setEquipos(prev => prev.filter(e => e.id !== id));
+      await fetchEquipos(); // Refresca la lista para evitar filas en blanco
     } catch (error) {
-      console.error('Error:', error);
       setError(error.message);
     } finally {
-      setLoading(false);
+      setDeletingId(null);
     }
   };
 
@@ -186,7 +194,7 @@ function Equipos() {
           <table style={styles.table}>
             <thead>
               <tr>
-                {['Nombre', 'Tipo', 'Ubicación', 'Estado', 'Acciones'].map(header => (
+                {['Nombre', 'Tipo', 'Ubicación', 'Estado', 'Eliminar'].map(header => (
                   <th key={header} style={styles.th}>{header}</th>
                 ))}
               </tr>
@@ -201,10 +209,10 @@ function Equipos() {
                   <td style={styles.td}>
                     <button 
                       onClick={() => handleDelete(equipo.id)}
-                      disabled={loading}
+                      disabled={!!deletingId}
                       style={styles.deleteButton}
                     >
-                      Eliminar
+                      {deletingId === equipo.id ? 'Eliminando...' : 'Eliminar'}
                     </button>
                   </td>
                 </tr>
